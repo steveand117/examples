@@ -33,6 +33,8 @@ import android.widget.Toast;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.tensorflow.lite.examples.classification.tflite.Classifier;
 import org.tensorflow.lite.examples.detection.customview.OverlayView;
 import org.tensorflow.lite.examples.detection.customview.OverlayView.DrawCallback;
 import org.tensorflow.lite.examples.detection.env.BorderedText;
@@ -82,6 +84,12 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
 
   private BorderedText borderedText;
 
+  // Classifier variables
+
+  private Classifier classifier;
+
+  private Bitmap imageCroppedBitmap = null;
+
   @Override
   public void onPreviewSizeChosen(final Size size, final int rotation) {
     final float textSizePx =
@@ -109,6 +117,20 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
       Toast toast =
           Toast.makeText(
               getApplicationContext(), "Detector could not be initialized", Toast.LENGTH_SHORT);
+      toast.show();
+      finish();
+    }
+
+    try {
+      LOGGER.d(
+              "Creating classifier (model=%s, device=%s, numThreads=%d)", Classifier.Model.FLOAT_MOBILENET, Classifier.Device.CPU, 1);
+      classifier = Classifier.create(this, Classifier.Model.FLOAT_MOBILENET, Classifier.Device.CPU, 1);
+    } catch (IOException | IllegalArgumentException e) {
+      e.printStackTrace();
+      LOGGER.e(e, "Exception initializing Classifier!");
+      Toast toast =
+              Toast.makeText(
+                      getApplicationContext(), "Classifier could not be initialized", Toast.LENGTH_SHORT);
       toast.show();
       finish();
     }
@@ -204,6 +226,17 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                 canvas.drawRect(location, paint);
 
                 cropToFrameTransform.mapRect(location);
+
+                // Classify image at location
+                int locationX = (int) location.left;
+                int locationY = (int) location.top;
+                int width = (int) location.width();
+                int height = (int) location.height();
+
+                imageCroppedBitmap = Bitmap.createBitmap(croppedBitmap, locationX, locationY, width, height);
+                List<Classifier.Recognition> classifierResults = classifier.recognizeImage(imageCroppedBitmap, sensorOrientation);
+
+                result.setTitle(classifierResults.get(0).getTitle());
 
                 result.setLocation(location);
                 mappedRecognitions.add(result);
